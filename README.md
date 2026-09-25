@@ -26,7 +26,7 @@ Anything already at one of those paths that isn't a link here is left alone and 
 
 ## Why this exists
 
-These are my skills, built from a mix of [Matt Pocock's skills](https://github.com/mattpocock/skills) and Ponytail. The point is to control what context each agent gets, instead of dragging one long conversation from idea to merge:
+These are my skills, built from a mix of [Matt Pocock's skills](https://github.com/mattpocock/skills) and [Ponytail](https://github.com/DietrichGebert/ponytail). The point is to control what context each agent gets, instead of dragging one long conversation from idea to merge:
 
 - **One job per context window.** Planning (`grill` → `spec` → `issues`) stays in one window. Every ticket gets a fresh one (`/clear`, then `/build`). Anything that crosses a machine, harness or person goes through `/handoff`.
 - **Handoffs are artifacts, not memory.** The spec and the tickets are GitHub issues. Terms go in `docs/glossary.md` and decisions in `docs/adr/`. The next agent reads those, not a transcript.
@@ -36,65 +36,172 @@ These are my skills, built from a mix of [Matt Pocock's skills](https://github.c
 
 ## How to use it
 
-### The main flow: idea → ship
+Work moves through two lifecycles. The **delivery lifecycle** takes an idea to merged code. Its implementation stage runs the **ticket lifecycle** once for every ticket. The two diagrams use the same notation:
+
+| Shape | Meaning |
+|---|---|
+| Rounded box | Entry point |
+| Rectangle | Step the agent performs |
+| Diamond | Approval gate: a question only you can answer |
+| Cylinder | Artifact the step produces; the next stage reads it |
+
+### Delivery lifecycle: idea → merged code
 
 ```mermaid
-flowchart LR
-    subgraph W1["Context window 1: planning"]
-        G["/grill<br/>interview the idea"] --> S["/spec<br/>spec issue"]
-        S --> I["/issues N<br/>one ticket per slice"]
+flowchart TD
+    classDef terminal fill:#2d3748,stroke:#2d3748,color:#ffffff
+    classDef step fill:#edf2f7,stroke:#4a5568,color:#1a202c
+    classDef gate fill:#fefcbf,stroke:#b7791f,color:#1a202c
+    classDef artifact fill:#e6fffa,stroke:#2c7a7b,color:#1a202c
+
+    IN(["Idea"]):::terminal
+
+    subgraph S1["1 · Discovery — /grill"]
+        S1a["Interview in rounds;<br/>ask only build-changing questions"]:::step
+        S1b[("Glossary and ADRs")]:::artifact
+        S1a --> S1b
     end
-    I --> C(["/clear"])
-    subgraph W2["Context window 2..n: one per ticket"]
-        B["/build N"] --> P["trace + plan"]
-        P --> Go{"Go?"}
-        Go -- yes --> T["branch → /tdd<br/>red → green"]
-        T --> K["checks"] --> R["/review<br/>standards · spec · lean"]
-        R --> SI{"Ship it?"}
+
+    subgraph S2["2 · Specification — /spec"]
+        S2a["Synthesise the discussion"]:::step
+        S2b[("Spec issue")]:::artifact
+        S2a --> S2b
     end
-    C --> B
-    SI -- tap --> SH["/ship<br/>layered commits → PR"]
-    SH --> M{"Merge?"}
-    M -- tap --> D(["rebase-merged on main"])
-    D -. next ticket .-> C
+
+    subgraph S3["3 · Decomposition — /issues"]
+        S3a["Split the spec into vertical slices"]:::step
+        S3g{"Approval gate:<br/>publish tickets?"}:::gate
+        S3b[("Ticket issues<br/>with dependency links")]:::artifact
+        S3a --> S3g -->|approved| S3b
+    end
+
+    subgraph S4["4 · Implementation — /build"]
+        S4a["Ticket lifecycle, stages 1–4<br/>plan · TDD · checks · review"]:::step
+        S4g{"Approval gate:<br/>ship it?"}:::gate
+        S4a --> S4g
+    end
+
+    subgraph S5["5 · Integration — /ship"]
+        S5a["Layered commits → pull request"]:::step
+        S5g{"Approval gate:<br/>merge PR?"}:::gate
+        S5b[("Rebase-merged on main")]:::artifact
+        S5a --> S5g -->|approved| S5b
+    end
+
+    IN --> S1a
+    S1b --> S2a
+    S2b --> S3a
+    S3b -.->|"/clear · new context window"| S4a
+    S4g -->|approved| S5a
+    S5b -.->|"next unblocked ticket"| S4a
 ```
 
-### What one ticket looks like
+| Stage | Command | Input | Output | Your role |
+|---|---|---|---|---|
+| 1 · Discovery | `/grill` | An idea, plan or decision | A settled design tree. Questions that don't change the build are defaulted and listed under **Assumed**. Terms go in `docs/glossary.md`, hard-to-reverse choices in `docs/adr/`. | Answer the questions |
+| 2 · Specification | `/spec` | The discovery conversation | One GitHub issue: Problem · Solution · Slices · Decisions · Seams under test · Assumed · Not building | Start it |
+| 3 · Decomposition | `/issues <spec #>` | The spec issue | One ticket per vertical slice, blockers first, with native dependency links | Approve publishing |
+| 4 · Implementation | `/clear`, then `/build <ticket #>` | One ready ticket, in a fresh context | A tested, reviewed change on a feature branch | Approve the plan and the ship |
+| 5 · Integration | `/ship` | The reviewed branch | Layered commits, a PR, a rebase merge, and the tickets it unblocks | Approve the merge |
+
+Stages 1–3 share one context window. Every ticket in stage 4 starts a new one, so the agent works from the ticket and the repo, not from the planning transcript.
+
+### Ticket lifecycle: one ticket → merged code
 
 ```mermaid
-sequenceDiagram
-    actor You
-    participant Agent
-    participant Hooks
-    participant GitHub
+flowchart TD
+    classDef terminal fill:#2d3748,stroke:#2d3748,color:#ffffff
+    classDef step fill:#edf2f7,stroke:#4a5568,color:#1a202c
+    classDef gate fill:#fefcbf,stroke:#b7791f,color:#1a202c
+    classDef artifact fill:#e6fffa,stroke:#2c7a7b,color:#1a202c
 
-    You->>Agent: /build 13
-    Agent->>GitHub: read ticket 13
-    Agent->>You: plan — Go?
-    You->>Agent: tap Go
-    Agent->>Agent: branch, /tdd red → green, checks
-    Agent->>Hooks: git commit
-    Hooks-->>Agent: allowed (not on main — no-commit-on-default.py)
-    Agent->>Agent: /review (3 sub-agents)
-    Agent->>You: Ship it?
-    You->>Agent: tap Ship it
-    Agent->>Hooks: start /ship
-    Hooks-->>Agent: allowed (tap on record — tap-approval.py)
-    Agent->>GitHub: push, open PR
-    Agent->>You: Merge PR?
-    You->>Agent: tap Merge
-    Agent->>GitHub: gh pr merge --rebase --delete-branch
-    Agent->>You: what's next (unblocked tickets, debts)
+    IN(["Ready ticket"]):::terminal
+
+    subgraph T1["1 · Intake — /build"]
+        T1a["Read the ticket"]:::step
+        T1b["Trace the code it touches"]:::step
+        T1a --> T1b
+    end
+
+    subgraph T2["2 · Planning — /build"]
+        T2a["Draft the plan:<br/>files, seams, order"]:::step
+        T2g{"Approval gate:<br/>proceed with plan?"}:::gate
+        T2a --> T2g
+    end
+
+    subgraph T3["3 · Implementation — /tdd"]
+        T3a["Create a feature branch"]:::step
+        T3b["Red → green<br/>at each named seam"]:::step
+        T3c["Run the checks"]:::step
+        T3a --> T3b --> T3c
+    end
+
+    subgraph T4["4 · Review — /review"]
+        T4a["Standards"]:::step
+        T4b["Spec"]:::step
+        T4c["Lean"]:::step
+        T4g{"Approval gate:<br/>ship it?"}:::gate
+        T4a & T4b & T4c --> T4g
+    end
+
+    subgraph T5["5 · Integration — /ship"]
+        T5a["Layered commits → pull request"]:::step
+        T5g{"Approval gate:<br/>merge PR?"}:::gate
+        T5b[("Rebase-merged on main")]:::artifact
+        T5a --> T5g -->|approved| T5b
+    end
+
+    IN --> T1a
+    T1b --> T2a
+    T2g -->|approved| T3a
+    T3c --> T4a & T4b & T4c
+    T4g -->|approved| T5a
 ```
+
+| Stage | Command | Input | Output | Your role |
+|---|---|---|---|---|
+| 1 · Intake | `/build <ticket #>` | The ticket issue | A trace of the code the ticket touches | Start it |
+| 2 · Planning | `/build` | The ticket and the trace | A plan: files to change, seams to test, order of work | Approve or redirect |
+| 3 · Implementation | `/tdd` | The approved plan | A feature branch, a failing test then passing code at each seam, checks passing | None |
+| 4 · Review | `/review` | The diff since the base | Three independent reports (Standards, Spec, Lean) shown side by side, never merged into one | Approve the ship |
+| 5 · Integration | `/ship` | The reviewed branch | Commits that each pass the checks, a PR, a rebase merge, the branch deleted, and what's next | Approve the merge |
+
+Hooks enforce the gates; the model can't skip them. `no-commit-on-default.py` refuses commits and pushes on `main`, so stage 3 always runs on a branch. `tap-approval.py` refuses to start `/ship` unless you just tapped **Ship it**. The merge gate is part of `/ship` itself: an open PR is never taken as permission.
 
 ### Detours
 
 ```mermaid
 flowchart TD
-    Q["A question only running code can answer"] --> PR["/prototype<br/>throwaway branch"] --> BK["answer goes back into /grill"]
-    BUG["Something's broken"] --> DG["/diagnose<br/>red-capable loop first"] --> A
-    SP["A spare moment"] --> A["/arch<br/>≤5 deepening candidates"] --> GR["/grill on the one you pick"]
-    X["New directory, harness or person"] --> H["/handoff"]
+    classDef terminal fill:#2d3748,stroke:#2d3748,color:#ffffff
+    classDef step fill:#edf2f7,stroke:#4a5568,color:#1a202c
+
+    subgraph D1["Design question — /prototype"]
+        D1i(["Question only running code can answer"]):::terminal
+        D1a["Throwaway prototype<br/>on a prototype/ branch"]:::step
+        D1b["Answer returns to /grill"]:::step
+        D1i --> D1a --> D1b
+    end
+
+    subgraph D2["Defect — /diagnose"]
+        D2i(["Something is broken or slow"]):::terminal
+        D2a["Build a failing feedback loop<br/>before any theory"]:::step
+        D2b["Structural findings go to /arch"]:::step
+        D2i --> D2a --> D2b
+    end
+
+    subgraph D3["Codebase health — /arch"]
+        D3i(["A spare moment"]):::terminal
+        D3a["Report up to 5<br/>deepening candidates"]:::step
+        D3b["/grill the chosen candidate"]:::step
+        D3i --> D3a --> D3b
+    end
+
+    subgraph D4["Change of context — /handoff"]
+        D4i(["New directory, harness or person"]):::terminal
+        D4a["Write a handoff document"]:::step
+        D4b["Next session starts from it"]:::step
+        D4i --> D4a --> D4b
+    end
 ```
 
 ### At a phase boundary
