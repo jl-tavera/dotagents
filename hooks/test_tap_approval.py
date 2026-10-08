@@ -26,8 +26,8 @@ class TapApprovalTests(unittest.TestCase):
         self.session = f"test-{uuid.uuid4().hex}"
         self.addCleanup(lambda: Path(tempfile.gettempdir(), f"claude-tap-approval-{self.session}.json").unlink(missing_ok=True))
 
-    def hook(self, script: str, payload: dict) -> int:
-        env = {**os.environ, "CLAUDE_PROJECT_DIR": str(self.project), "HOME": str(self.root), "USERPROFILE": str(self.root)}
+    def hook(self, script: str, payload: dict, **extra: str) -> int:
+        env = {**{k: v for k, v in os.environ.items() if k != "CLAUDE_AUTOPILOT"}, **extra, "CLAUDE_PROJECT_DIR": str(self.project), "HOME": str(self.root), "USERPROFILE": str(self.root)}
         return subprocess.run([sys.executable, str(HOOKS / script)], input=json.dumps(payload),
                               text=True, capture_output=True, env=env).returncode
 
@@ -36,10 +36,10 @@ class TapApprovalTests(unittest.TestCase):
             "hook_event_name": "PostToolUse", "tool_name": "AskUserQuestion", "session_id": session or self.session,
             "tool_response": {"questions": [], "answers": {"Ship it?": label}}})
 
-    def call(self, skill: str) -> int:
+    def call(self, skill: str, **extra: str) -> int:
         return self.hook("tap-approval.py", {
             "hook_event_name": "PreToolUse", "tool_name": "Skill", "session_id": self.session,
-            "tool_input": {"skill": skill}})
+            "tool_input": {"skill": skill}}, **extra)
 
     def test_ship_needs_a_tap_and_the_tap_is_used_up(self):
         self.assertEqual(self.call("ship"), 2)
@@ -55,6 +55,10 @@ class TapApprovalTests(unittest.TestCase):
     def test_a_tap_in_another_session_does_not_count(self):
         self.tap("Ship it — run /ship", session=f"other-{uuid.uuid4().hex}")
         self.assertEqual(self.call("ship"), 2)
+
+    def test_autopilot_runner_env_stands_in_for_the_tap(self):
+        self.assertEqual(self.call("ship", CLAUDE_AUTOPILOT="1"), 0)
+        self.assertEqual(self.call("ship", CLAUDE_AUTOPILOT="0"), 2)
 
     def test_skills_without_approval_tap_are_untouched(self):
         self.assertEqual(self.call("tdd"), 0)

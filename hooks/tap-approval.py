@@ -85,6 +85,12 @@ def on_skill(payload: dict, root: str) -> None:
     if not skill or not tap_only(root, skill):
         sys.exit(0)
 
+    # Set by /autopilot's runner on the headless session it starts, and so inherited by this hook.
+    # The model can't set it: its Bash env never reaches the hook process. The person who started
+    # the runner gave the tap in advance.
+    if os.environ.get("CLAUDE_AUTOPILOT") == "1":
+        sys.exit(0)
+
     target = pass_path(payload.get("session_id", ""))
     try:
         with open(target, "r", encoding="utf-8") as handle:

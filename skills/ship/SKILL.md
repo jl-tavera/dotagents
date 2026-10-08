@@ -1,6 +1,6 @@
 ---
 name: ship
-description: "Take finished work from a feature branch to merged: shape it into layered commits that each pass the checks, push, open a PR, ask before merging, then land it and report what comes next. Started only by the user — typing /ship, or tapping \"Ship it — run /ship\" in /build's closing question; tap-approval.py refuses any other call."
+description: "Take finished work from a feature branch to merged: shape it into layered commits that each pass the checks, push, open a PR, ask before merging, then land it and report what comes next. Started only by the user — typing /ship, or tapping \"Ship it — run /ship\" in /build's closing question, or /build auto inside an /autopilot run; tap-approval.py refuses any other call."
 approval: tap
 ---
 
@@ -11,6 +11,14 @@ The endgame, once the work is done and `/review` has been through it: commits wo
 This skill names the commands rather than describing them. The flags carry the decisions — `--rebase` rather than `--squash` is the difference between seven commits on `main` and one — so leaving them to be re-derived each time is how a decision quietly reverses.
 
 This skill never merges without being told to. Every stop — merge, or a situation it doesn't expect — is a question asked with the AskUserQuestion tool, never one written in the reply: a pending question notifies the user in the Remote Control app, a reply that just ends does not.
+
+## Auto mode
+
+The arguments contain `auto` (`/build … auto` passes it on under `/autopilot`, and nobody is watching). Same process, with these changes:
+
+- **Merge without asking**, but only when step 2's per-commit loop passed on every commit and step 4 found nothing red. Otherwise don't merge.
+- **Every place that would ask the user stops instead.** That covers the merge when the checks aren't green, pushed commits on the default branch, and the cases under "When the tree is not what you expected". Comment on the ticket with what you found, run `gh issue edit <n> --add-label needs-human --remove-label ready-for-agent`, and end the session. Never call AskUserQuestion.
+- **Step 7's report goes on the ticket** as a `gh issue comment`. Nobody is reading this terminal.
 
 ## Process
 
