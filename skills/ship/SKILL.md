@@ -71,6 +71,15 @@ Messages follow the repo's own voice — read `git log` before writing one. Here
 
 ### 3. Push and open the PR
 
+First land on the latest base: other branches may have merged while this one was built (`/autopilot` runs several at once).
+
+```bash
+git fetch origin
+git rebase origin/<default-branch>
+```
+
+A conflict where both sides add something (an import, a list entry, a function) is resolved by keeping both. Anything else stops here with AskUserQuestion (auto mode: comment, `needs-human`, end). After resolving, `git diff origin/<default-branch>` must show only this ticket's additions: nothing that was on the base may disappear. Then run step 2's per-commit loop again. If the merge in step 6 is later refused for conflicts, do this once more and push with `--force-with-lease`; a second refusal stops.
+
 ```bash
 git push -u origin <branch>
 gh pr create --base <default-branch> --head <branch> --title "<subject>" --body-file -
@@ -91,6 +100,8 @@ Report the PR link, the check state, and the commits as they will land. Then ask
 Wait for the tap. A green PR is not permission.
 
 ### 6. Land it
+
+In a linked worktree (`git rev-parse --git-dir` names a `worktrees/` path, which is how `/autopilot` runs), merge without `--delete-branch` and skip the local sync below: `main` is checked out elsewhere, so `git checkout` would fail, and the autopilot runner deletes the branch and removes the worktree once the ticket closes.
 
 ```bash
 gh pr merge <n> --rebase --delete-branch
