@@ -27,6 +27,7 @@ If you haven't explored the codebase, do so enough to know what each slice touch
 - A ticket that isn't demoable on its own doesn't exist: merge it into the slice that makes it visible.
 - **N > 5 means the spec is too big.** Say so and stop; split the spec first.
 - Blocking edges: the tickets that must complete before this one can start. A ticket with no blockers can start immediately.
+- Slices that can build in parallel own their files; one-time registration (lists, stubs, a shared base query) rides in the first slice, so later slices touch nothing shared.
 
 **Wide refactors are the one exception to vertical slicing.** A wide refactor is one mechanical change (rename a column, retype a shared symbol) whose blast radius fans across the codebase, so no vertical slice can land green. Sequence it as **expand → migrate → contract**: add the new form beside the old so nothing breaks; migrate call sites in batches sized by blast radius (per package, per directory), each batch its own ticket blocked by the expand; delete the old form in a final ticket blocked by every batch.
 
