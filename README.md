@@ -21,7 +21,7 @@ Anything already at one of those paths that isn't a link here is left alone and 
 
 - `AGENTS.md` — rules every harness should follow.
 - `skills/` — one folder per skill, `SKILL.md` in the open Agent Skills format.
-- `hooks/` — Python hooks, JSON on stdin, exit code out. Each looks for skills in the project's `.claude/` first, then `~/.claude/`. Test: `python hooks/test_tap_approval.py`.
+- `hooks/` — Python hooks, JSON on stdin, exit code out. Each looks for skills in the project's `.claude/` first, then `~/.claude/`. Test: `python hooks/test_tap_approval.py` and `python skills/autopilot/test_autopilot.py`.
 - Never copy `hooks/` or these skills into a project's `.claude/`: a copy goes stale, and its hooks fire alongside the linked ones (an old `tap-approval.py` stopped `/autopilot` from shipping). A project's `.claude/` holds only its own skills and `lazy-mode`. `/autopilot` sessions skip project settings for this reason.
 - `harness/<name>/` — the wiring one harness needs. Adding a harness = a folder here and a few lines in `install.py`.
 
@@ -331,9 +331,10 @@ Third-party skills, installed on their own: [agent-browser](https://github.com/v
 ## Autopilot: a queue of tickets, unattended
 
 ```
-/autopilot 51-55        # a range — or `51 53 54`, or nothing for every open ready-for-agent ticket
+/autopilot 51-55            # a range — or `51 53 54`, or nothing for every open ready-for-agent ticket
+/autopilot 51-55 --serial   # one ticket at a time
 ```
 
-Run it in a fresh session in the project; that chat becomes the control room. A script runs one fresh headless `claude -p "/build <n> auto"` session per ticket. It goes lowest number first and skips tickets that still have an open blocker. The chat gets one line per milestone (`#51 /review`, `#51 merging`, `#51 merged ✓`, `#52 started`). Ask it "how's it going?" or "stop after this one" at any time. `claude --resume <session id>` opens any ticket's full session.
+Run it in a fresh session in the project; that chat becomes the control room. A script runs one fresh headless `claude -p "/build <n> auto"` session per ticket, each in its own git worktree at `<repo>-worktrees/<n>`, cut from the remote default branch with dependencies installed from the lockfile. Up to four tickets run at once, lowest number first, skipping tickets that still have an open blocker. Another starts only while the subscription's 5-hour and weekly windows are under 80%, read from the sessions' own output stream; `--serial` runs one at a time. The chat gets one line per milestone (`#51 /review`, `#51 merging`, `#51 merged ✓`, `#52 started`). Ask it "how's it going?" or "stop after this one" at any time. `claude --resume <session id>` opens any ticket's full session.
 
-In auto mode the gates take their **(Recommended)** option. The plan is posted as a comment on the ticket instead of asking **Go**. `/ship` merges only when every commit passed the checks. `tap-approval.py` lets `/ship` start without a tap only when the runner set `CLAUDE_AUTOPILOT=1`, which the model can't set. Anything that would have needed you stops the run. The ticket then gets a comment and the `needs-human` label. Answer it, remove the label, and run `/autopilot` again. A plain `/build <n>` still asks at every gate.
+In auto mode the gates take their **(Recommended)** option. The plan is posted as a comment on the ticket instead of asking **Go**. `/ship` merges only when every commit passed the checks. `tap-approval.py` lets `/ship` start without a tap only when the runner set `CLAUDE_AUTOPILOT=1`, which the model can't set. Anything that would have needed you stops that ticket: it gets a comment and the `needs-human` label, its worktree stays for you to look at, nothing new starts, and the tickets already running finish. Answer it, remove the label, and run `/autopilot` again. A merged ticket's worktree and branch are removed. Your own checkout is never touched, so `main` there falls behind: `git pull` when you're ready. A plain `/build <n>` still asks at every gate.
