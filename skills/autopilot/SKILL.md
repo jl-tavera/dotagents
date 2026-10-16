@@ -18,4 +18,4 @@ Start the queue and report on it. You don't build anything here: every ticket ru
    - "stop after this one": create the STOP file whose path the script printed. The tickets already running finish and nothing new starts.
    - "stop now": stop the background task. Each running ticket's branch stays in its worktree, so name every ticket that was mid-flight and its worktree path.
    - the details of a ticket: point to `claude --resume <session id>` from the output, or to the log path.
-5. **When it ends**, remind the user that the script never touches their checkout: `git pull` brings `main` up to date.
+5. **When it ends**, the script fetches, fast-forwards a clean `main` in the root checkout and prints one `sync:` line per thing worth knowing. Relay them as printed. A line that says `fetched only`, `diverged` or `upstream gone` names what the user must do by hand; say so in one line.

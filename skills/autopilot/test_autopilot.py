@@ -34,5 +34,18 @@ class Parse(unittest.TestCase):
         self.assertEqual(autopilot.parse(["52 and 53"]), ([52, 53], None, False))
 
 
+class Standing(unittest.TestCase):
+    def test_reports_gone_off_and_unpushed(self):
+        lines = ["main\torigin/main\t", "feat/a\torigin/feat/a\t[gone]",
+                 "feat/b\torigin/feat/b\t[ahead 2, behind 1]", "scratch"]  # last line: git() stripped its tabs
+        self.assertEqual(autopilot.standing(lines), [
+            "sync: upstream gone for feat/a -- `git branch -D <name>` once nothing there is wanted",
+            "sync: not level with upstream: feat/b [ahead 2, behind 1]",
+            "sync: never pushed: scratch"])
+
+    def test_level_branches_say_nothing(self):
+        self.assertEqual(autopilot.standing(["main\torigin/main"]), [])
+
+
 if __name__ == "__main__":
     unittest.main()

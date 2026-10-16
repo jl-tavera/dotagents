@@ -19,11 +19,13 @@ within its first few lines and on every 1% change (seen in every logged run; not
 reading yet counts as headroom, and one session always runs.
 
 A merged ticket's worktree and branch are removed; a stopped ticket's stay for a person to look at.
-The root checkout is only ever fetched, so `main` there falls behind as tickets merge: `git pull`.
+When the run ends the root checkout is fetched, a clean `main` there is fast-forwarded, and one `sync:`
+line per branch worth knowing about is printed; nothing is deleted or reset.
 Logs and the STOP file live in the temp dir, never in the repo: an untracked file there would make
 /ship's "tree is not what you expected" check stop every run.
 """
 
+import atexit
 import json
 import os
 import shutil
@@ -182,6 +184,52 @@ def remove_worktree(root: str, path: str) -> None:
         git(root, "push", "--quiet", "origin", "--delete", branch)
 
 
+def standing(lines: list[str]) -> list[str]:
+    """`sync:` lines for `for-each-ref` output -- `<branch>\\t<upstream>\\t<track>`, one per local branch.
+
+    `git()` strips the output, so the last line may have lost its trailing empty fields.
+    """
+    gone, off, local = [], [], []
+    for line in lines:
+        branch, upstream, track = (line.split("\t") + ["", ""])[:3]
+        if not upstream:
+            local.append(branch)
+        elif track == "[gone]":
+            gone.append(branch)
+        elif track:
+            off.append(f"{branch} {track}")
+    out = []
+    if gone:
+        out.append(f"sync: upstream gone for {', '.join(gone)} -- `git branch -D <name>` once nothing there is wanted")
+    if off:
+        out.append(f"sync: not level with upstream: {', '.join(off)}")
+    if local:
+        out.append(f"sync: never pushed: {', '.join(local)}")
+    return out
+
+
+def sync(root: str, base: str) -> None:
+    """Fetch, fast-forward a clean `<base>` in the root checkout, and say where every local branch stands."""
+    git(root, "fetch", "--prune", "--quiet", "origin")
+    branch, dirty = git(root, "rev-parse", "--abbrev-ref", "HEAD"), git(root, "status", "--porcelain")
+    behind = int(git(root, "rev-list", "--count", f"HEAD..origin/{base}") or 0)
+    if branch != base:
+        say(f"sync: root is on {branch}, not {base}; fetched only")
+    elif dirty:
+        say(f"sync: root has local changes; fetched only -- `git pull --ff-only` once it's clean")
+    elif not behind:
+        say(f"sync: {base} is level with origin/{base}")
+    else:
+        try:
+            git(root, "merge", "--ff-only", "--quiet", f"origin/{base}", check=True)
+            say(f"sync: {base} fast-forwarded {behind} commit{'s' if behind > 1 else ''} to origin/{base}")
+        except subprocess.CalledProcessError:
+            say(f"sync: {base} has diverged from origin/{base}; not touched")
+    refs = git(root, "for-each-ref", "--format=%(refname:short)%09%(upstream:short)%09%(upstream:track)", "refs/heads")
+    for line in standing(refs.splitlines()):
+        say(line)
+
+
 def run(n: int, cwd: str, logs: str, claude: str) -> None:
     log_path = os.path.join(logs, f"{n}.log")
     env = {**os.environ, "CLAUDE_AUTOPILOT": "1"}
@@ -235,6 +283,7 @@ def main() -> int:
         say("STOPPED: not inside a git checkout")
         return 1
     base = gh("api", f"repos/{repo}", "--jq", ".default_branch") or "main"
+    atexit.register(sync, root, base)  # whichever way main() ends, the sync report is the last thing printed
     if not numbers:
         out = gh("issue", "list", "--label", LABEL, "--state", "open", "--limit", "200", "--json", "number")
         numbers = sorted(issue["number"] for issue in json.loads(out or "[]"))
