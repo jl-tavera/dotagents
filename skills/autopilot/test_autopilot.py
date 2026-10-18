@@ -28,10 +28,15 @@ class Headroom(unittest.TestCase):
 class Parse(unittest.TestCase):
     def test_serial_range_and_max(self):
         self.assertEqual(autopilot.parse(["--serial", "51-55,", "58", "--max", "2"]),
-                         ([51, 52, 53, 54, 55, 58], 2, True))
+                         ([51, 52, 53, 54, 55, 58], 2, 1))
 
     def test_default_is_parallel(self):
-        self.assertEqual(autopilot.parse(["52 and 53"]), ([52, 53], None, False))
+        self.assertEqual(autopilot.parse(["52 and 53"]), ([52, 53], None, autopilot.MAX_JOBS))
+
+    def test_jobs_sets_the_ceiling(self):
+        self.assertEqual(autopilot.parse(["--jobs", "2", "51"]), ([51], None, 2))
+        with self.assertRaises(ValueError):
+            autopilot.parse(["--jobs", "0", "51"])
 
 
 class Standing(unittest.TestCase):

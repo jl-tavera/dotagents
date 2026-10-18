@@ -4,7 +4,8 @@
     python autopilot.py              every open `ready-for-agent` ticket
     python autopilot.py 51-55 58     a range and/or single numbers
     python autopilot.py --max 3 ...  at most three tickets
-    python autopilot.py --serial ... one ticket at a time
+    python autopilot.py --jobs 2 ... at most two at once (default 4)
+    python autopilot.py --serial ... one ticket at a time (same as --jobs 1)
 
 Run it from the project's root. Each ticket gets a worktree at <root>-worktrees/<n>, cut from the
 freshly fetched remote default branch, and a fresh `claude -p` session there with CLAUDE_AUTOPILOT=1
@@ -37,7 +38,7 @@ import time
 
 LABEL = "ready-for-agent"
 STUCK = "needs-human"
-MAX_JOBS = 4  # lazy: a constant; make it a flag when a project wants more at once
+MAX_JOBS = 4  # default for --jobs
 CEILING = 0.80  # lazy: one ceiling for both windows; split them if the weekly one bites first
 INSTALL = {"pnpm-lock.yaml": ["pnpm", "install", "--frozen-lockfile", "--prefer-offline"],
            "package-lock.json": ["npm", "ci"]}
@@ -60,22 +61,26 @@ def git(cwd: str, *args: str, check: bool = False) -> str:
     return done.stdout.strip()
 
 
-def parse(argv: list[str]) -> tuple[list[int], int | None, bool]:
+def parse(argv: list[str]) -> tuple[list[int], int | None, int]:
     # The /autopilot chat passes the user's words as typed: `52 and 53`, `52, 53`.
-    numbers, limit, serial, rest = [], None, False, iter(" ".join(argv).replace(",", " ").split())
+    numbers, limit, jobs, rest = [], None, MAX_JOBS, iter(" ".join(argv).replace(",", " ").split())
     for arg in rest:
         if arg.lower() == "and":
             continue
         if arg == "--max":
             limit = int(next(rest))
+        elif arg == "--jobs":
+            jobs = int(next(rest))
         elif arg == "--serial":
-            serial = True
+            jobs = 1
         elif "-" in arg:
             low, high = map(int, arg.lstrip("#").split("-"))
             numbers += range(low, high + 1)
         else:
             numbers.append(int(arg.lstrip("#")))
-    return sorted(set(numbers)), limit, serial
+    if jobs < 1:
+        raise ValueError("--jobs must be at least 1")
+    return sorted(set(numbers)), limit, jobs
 
 
 def ticket(n: int) -> dict:
@@ -266,9 +271,9 @@ def run(n: int, cwd: str, logs: str, claude: str) -> None:
 def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8")  # Windows pipes default to cp1252
     try:
-        numbers, limit, serial = parse(sys.argv[1:])
+        numbers, limit, jobs = parse(sys.argv[1:])
     except (ValueError, StopIteration):
-        say(f"STOPPED: can't read {' '.join(sys.argv[1:])!r}; use numbers, ranges (51-55), --max N and --serial")
+        say(f"STOPPED: can't read {' '.join(sys.argv[1:])!r}; use numbers, ranges (51-55), --max N, --jobs N and --serial")
         return 1
     claude = shutil.which("claude")
     if not claude:
@@ -293,9 +298,8 @@ def main() -> int:
     stop_file = os.path.join(logs, "STOP")
     if os.path.exists(stop_file):
         os.remove(stop_file)
-    jobs = 1 if serial else MAX_JOBS
     say(f"autopilot {repo}: {', '.join(f'#{n}' for n in numbers) or 'nothing to do'}"
-        f" -- {'one at a time' if serial else f'up to {jobs} at once'}, worktrees in {root}-worktrees")
+        f" -- {'one at a time' if jobs == 1 else f'up to {jobs} at once'}, worktrees in {root}-worktrees")
     say(f"stop after the running ticket{'s' if jobs > 1 else ''}: create {stop_file}")
 
     done, pending = 0, list(numbers)
