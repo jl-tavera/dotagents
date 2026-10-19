@@ -5,7 +5,6 @@
     python autopilot.py 51-55 58     a range and/or single numbers
     python autopilot.py --max 3 ...  at most three tickets
     python autopilot.py --jobs 2 ... at most two at once (default 4)
-    python autopilot.py --serial ... one ticket at a time (same as --jobs 1)
     python autopilot.py --model sonnet ...  another model (default claude-opus-5-5)
 
 Run it from the project's root. Each ticket gets a worktree at <root>-worktrees/<n>, cut from the
@@ -75,8 +74,6 @@ def parse(argv: list[str]) -> tuple[list[int], int | None, int, str]:
             limit = int(next(rest))
         elif arg == "--jobs":
             jobs = int(next(rest))
-        elif arg == "--serial":
-            jobs = 1
         elif arg == "--model":
             model = next(rest)
         elif "-" in arg:
@@ -281,7 +278,7 @@ def main() -> int:
         numbers, limit, jobs, model = parse(sys.argv[1:])
     except (ValueError, StopIteration):
         say(f"STOPPED: can't read {' '.join(sys.argv[1:])!r}; "
-            "use numbers, ranges (51-55), --max N, --jobs N, --serial and --model X")
+            "use numbers, ranges (51-55), --max N, --jobs N and --model X")
         return 1
     claude = shutil.which("claude")
     if not claude:

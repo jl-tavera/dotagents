@@ -26,8 +26,8 @@ class Headroom(unittest.TestCase):
 
 
 class Parse(unittest.TestCase):
-    def test_serial_range_and_max(self):
-        self.assertEqual(autopilot.parse(["--serial", "51-55,", "58", "--max", "2"]),
+    def test_jobs_range_and_max(self):
+        self.assertEqual(autopilot.parse(["--jobs", "1", "51-55,", "58", "--max", "2"]),
                          ([51, 52, 53, 54, 55, 58], 2, 1, autopilot.MODEL))
 
     def test_default_is_parallel_on_opus(self):
