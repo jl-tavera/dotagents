@@ -6,13 +6,15 @@
     python autopilot.py --max 3 ...  at most three tickets
     python autopilot.py --jobs 2 ... at most two at once (default 4)
     python autopilot.py --serial ... one ticket at a time (same as --jobs 1)
+    python autopilot.py --model sonnet ...  another model (default claude-opus-5-5)
 
 Run it from the project's root. Each ticket gets a worktree at <root>-worktrees/<n>, cut from the
-freshly fetched remote default branch, and a fresh `claude -p` session there with CLAUDE_AUTOPILOT=1
-in its env -- the only thing that lets tap-approval.py start /ship without a tap, and something the
-model inside cannot set for itself. The session loads user and local settings only, so only the
-user-level hooks guard it (see run()). Prints one line per milestone, flushed, so whoever runs it (a
-person or the /autopilot chat) can follow along.
+freshly fetched remote default branch, and a fresh `claude -p` session there on `--model` (Opus 5.5
+unless told otherwise, whatever the settings say) with CLAUDE_AUTOPILOT=1 in its env -- the only
+thing that lets tap-approval.py start /ship without a tap, and something the model inside cannot set
+for itself. The session loads user and local settings only, so only the user-level hooks guard it
+(see run()). Prints one line per milestone, flushed, so whoever runs it (a person or the /autopilot
+chat) can follow along.
 
 Another session starts only while the subscription's 5-hour and 7-day windows are under CEILING. The
 reading comes from the sessions themselves: `--output-format stream-json` sends a `rate_limit_event`
@@ -39,6 +41,7 @@ import time
 LABEL = "ready-for-agent"
 STUCK = "needs-human"
 MAX_JOBS = 4  # default for --jobs
+MODEL = "claude-opus-5-5"  # default for --model; the full ID pins it, the `opus` alias would follow the newest
 CEILING = 0.80  # lazy: one ceiling for both windows; split them if the weekly one bites first
 INSTALL = {"pnpm-lock.yaml": ["pnpm", "install", "--frozen-lockfile", "--prefer-offline"],
            "package-lock.json": ["npm", "ci"]}
@@ -61,9 +64,10 @@ def git(cwd: str, *args: str, check: bool = False) -> str:
     return done.stdout.strip()
 
 
-def parse(argv: list[str]) -> tuple[list[int], int | None, int]:
+def parse(argv: list[str]) -> tuple[list[int], int | None, int, str]:
     # The /autopilot chat passes the user's words as typed: `52 and 53`, `52, 53`.
-    numbers, limit, jobs, rest = [], None, MAX_JOBS, iter(" ".join(argv).replace(",", " ").split())
+    numbers, limit, jobs, model = [], None, MAX_JOBS, MODEL
+    rest = iter(" ".join(argv).replace(",", " ").split())
     for arg in rest:
         if arg.lower() == "and":
             continue
@@ -73,6 +77,8 @@ def parse(argv: list[str]) -> tuple[list[int], int | None, int]:
             jobs = int(next(rest))
         elif arg == "--serial":
             jobs = 1
+        elif arg == "--model":
+            model = next(rest)
         elif "-" in arg:
             low, high = map(int, arg.lstrip("#").split("-"))
             numbers += range(low, high + 1)
@@ -80,7 +86,7 @@ def parse(argv: list[str]) -> tuple[list[int], int | None, int]:
             numbers.append(int(arg.lstrip("#")))
     if jobs < 1:
         raise ValueError("--jobs must be at least 1")
-    return sorted(set(numbers)), limit, jobs
+    return sorted(set(numbers)), limit, jobs, model
 
 
 def ticket(n: int) -> dict:
@@ -235,14 +241,14 @@ def sync(root: str, base: str) -> None:
         say(line)
 
 
-def run(n: int, cwd: str, logs: str, claude: str) -> None:
+def run(n: int, cwd: str, logs: str, claude: str, model: str) -> None:
     log_path = os.path.join(logs, f"{n}.log")
     env = {**os.environ, "CLAUDE_AUTOPILOT": "1"}
     # No `project` source: repos that vendored an old copy of these hooks wire it in their
     # .claude/settings.json, and that copy refuses /ship even with CLAUDE_AUTOPILOT set.
     # lazy: drops a repo's own settings.json (permissions, env) too; load `project` again once no repo vendors hooks.
-    command = [claude, "-p", f"/build {n} auto", "--setting-sources", "user,local", "--permission-mode", "auto",
-               "--output-format", "stream-json", "--verbose"]
+    command = [claude, "-p", f"/build {n} auto", "--model", model, "--setting-sources", "user,local",
+               "--permission-mode", "auto", "--output-format", "stream-json", "--verbose"]
     with open(log_path, "w", encoding="utf-8") as log, subprocess.Popen(
             command, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8",
             env=env) as proc:
@@ -259,7 +265,8 @@ def run(n: int, cwd: str, logs: str, claude: str) -> None:
                         usage[window] = windows[window].get("utilization")
                 reported.add(n)
             elif event.get("type") == "system" and event.get("subtype") == "init":
-                say(f"#{n} session {event.get('session_id')}  (claude --resume {event.get('session_id')})")
+                say(f"#{n} session {event.get('session_id')} on {event.get('model')}"
+                    f"  (claude --resume {event.get('session_id')})")
             elif event.get("type") == "result":
                 cost = event.get("total_cost_usd")
                 say(f"#{n} session ended{f' (${cost:.2f})' if cost else ''}: {str(event.get('result', ''))[-300:]}")
@@ -271,9 +278,10 @@ def run(n: int, cwd: str, logs: str, claude: str) -> None:
 def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8")  # Windows pipes default to cp1252
     try:
-        numbers, limit, jobs = parse(sys.argv[1:])
+        numbers, limit, jobs, model = parse(sys.argv[1:])
     except (ValueError, StopIteration):
-        say(f"STOPPED: can't read {' '.join(sys.argv[1:])!r}; use numbers, ranges (51-55), --max N, --jobs N and --serial")
+        say(f"STOPPED: can't read {' '.join(sys.argv[1:])!r}; "
+            "use numbers, ranges (51-55), --max N, --jobs N, --serial and --model X")
         return 1
     claude = shutil.which("claude")
     if not claude:
@@ -299,7 +307,7 @@ def main() -> int:
     if os.path.exists(stop_file):
         os.remove(stop_file)
     say(f"autopilot {repo}: {', '.join(f'#{n}' for n in numbers) or 'nothing to do'}"
-        f" -- {'one at a time' if jobs == 1 else f'up to {jobs} at once'}, worktrees in {root}-worktrees")
+        f" -- {'one at a time' if jobs == 1 else f'up to {jobs} at once'} on {model}, worktrees in {root}-worktrees")
     say(f"stop after the running ticket{'s' if jobs > 1 else ''}: create {stop_file}")
 
     done, pending = 0, list(numbers)
@@ -346,7 +354,7 @@ def main() -> int:
                 stopped = halt = True
                 break
             say(f"#{n} started ({gauge()}): {title}")
-            thread = threading.Thread(target=run, args=(n, path, logs, claude), daemon=True)
+            thread = threading.Thread(target=run, args=(n, path, logs, claude, model), daemon=True)
             thread.start()
             running[n] = (thread, path)
             last_started = n
