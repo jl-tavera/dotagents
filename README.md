@@ -32,7 +32,7 @@ These are my skills, built from a mix of [Matt Pocock's skills](https://github.c
 - **One job per context window.** Planning (`grill` → `spec` → `issues`) stays in one window. Every ticket gets a fresh one (`/clear`, then `/build`). Anything that crosses a machine, harness or person goes through `/handoff`.
 - **Handoffs are artifacts, not memory.** The spec and the tickets are GitHub issues. Terms go in `docs/glossary.md` and decisions in `docs/adr/`. The next agent reads those, not a transcript.
 - **Sub-agents for scoped work.** `/review` runs three in parallel (standards, spec, lean) and reports them side by side, never merged into one verdict.
-- **Best practice is built in, not remembered:** questions before code, vertical slices, TDD at the seams the ticket names, a three-axis review, layered commits that each pass the checks, rebase merges, and the simplest thing that works (`lazy`, always on).
+- **Best practice is built in, not remembered:** questions before code, vertical slices, TDD at the seams the ticket names, a verification pass on the real surface, a three-axis review, layered commits that each pass the checks, rebase merges, and the simplest thing that works (`lazy`, always on).
 - **You stay in the loop.** Every stop is a tappable question (Go? / Ship it? / Merge?), and hooks make sure the model can't skip one.
 
 ## How to use it
@@ -77,7 +77,7 @@ flowchart TD
     end
 
     subgraph S4["4 · Implementation — /build"]
-        S4a["Ticket lifecycle, stages 1–4<br/>plan · TDD · checks · review"]:::step
+        S4a["Ticket lifecycle, stages 1–4<br/>plan · TDD · checks · verify · review"]:::step
         S4g{"Approval gate:<br/>ship it?"}:::gate
         S4a --> S4g
     end
@@ -102,7 +102,7 @@ flowchart TD
 | 1 · Discovery | `/grill` | An idea, plan or decision | A settled design tree. Questions that don't change the build are defaulted and listed under **Assumed**. Terms go in `docs/glossary.md`, hard-to-reverse choices in `docs/adr/`. | Answer the questions |
 | 2 · Specification | `/spec` | The discovery conversation | One GitHub issue: Problem · Solution · Slices · Decisions · Seams under test · Assumed · Not building | Start it |
 | 3 · Decomposition | `/issues <spec #>` | The spec issue | One ticket per vertical slice, blockers first, with native dependency links | Approve publishing |
-| 4 · Implementation | `/clear`, then `/build <ticket #>` | One ready ticket, in a fresh context | A tested, reviewed change on a feature branch | Approve the plan and the ship |
+| 4 · Implementation | `/clear`, then `/build <ticket #>` | One ready ticket, in a fresh context | A tested, verified, reviewed change on a feature branch | Approve the plan and the ship |
 | 5 · Integration | `/ship` | The reviewed branch | Layered commits, a PR, a rebase merge, and the tickets it unblocks | Approve the merge |
 
 Stages 1–3 share one context window. Every ticket in stage 4 starts a new one, so the agent works from the ticket and the repo, not from the planning transcript.
@@ -130,11 +130,12 @@ flowchart TD
         T2a --> T2g
     end
 
-    subgraph T3["3 · Implementation — /tdd"]
+    subgraph T3["3 · Implementation — /tdd, /verify"]
         T3a["Create a feature branch"]:::step
         T3b["Red → green<br/>at each named seam"]:::step
         T3c["Run the checks"]:::step
-        T3a --> T3b --> T3c
+        T3d["/verify: run the real artifact,<br/>capture evidence"]:::step
+        T3a --> T3b --> T3c --> T3d
     end
 
     subgraph T4["4 · Review — /review"]
@@ -155,7 +156,7 @@ flowchart TD
     IN --> T1a
     T1b --> T2a
     T2g -->|approved| T3a
-    T3c --> T4a & T4b & T4c
+    T3d --> T4a & T4b & T4c
     T4g -->|approved| T5a
 ```
 
@@ -163,7 +164,7 @@ flowchart TD
 |---|---|---|---|---|
 | 1 · Intake | `/build <ticket #>` | The ticket issue | A trace of the code the ticket touches | Start it |
 | 2 · Planning | `/build` | The ticket and the trace | A plan: files to change, seams to test, order of work | Approve or redirect |
-| 3 · Implementation | `/tdd` | The approved plan | A feature branch, a failing test then passing code at each seam, checks passing | None |
+| 3 · Implementation | `/tdd`, `/verify` | The approved plan | A feature branch, a failing test then passing code at each seam, checks passing, a PASS verdict with evidence from the running artifact | None |
 | 4 · Review | `/review` | The diff since the base | Three independent reports (Standards, Spec, Lean) shown side by side, never merged into one | Approve the ship |
 | 5 · Integration | `/ship` | The reviewed branch | Commits that each pass the checks, a PR, a rebase merge, the branch deleted, and what's next | Approve the merge |
 
@@ -228,7 +229,7 @@ The first one that fits wins:
    → #13 export one table, #14 export all (blocked by #13), #15 download UI (blocked by #14)
 /clear
 /build 13
-   → plan → Go? → feat/13-export-table → red → green → review → Ship it?
+   → plan → Go? → feat/13-export-table → red → green → verify → review → Ship it?
    → [tap] → PR #16 → Merge? → [tap] → merged; "#14 is unblocked"
 /clear
 /build 14
@@ -275,6 +276,14 @@ The first one that fits wins:
 /review HEAD~3      → the last three commits
 ```
 
+**Proving a change works**
+
+```
+/verify main          → runs the real surface the diff touches; PASS / FAIL / INCONCLUSIVE, evidence path
+/ripple HEAD~1        → the one fact a small diff is safe because of, proven by running code
+/verify-skill         → .claude/skills/verify-<app>/ in the project: Launch · Doctor · Drive · Evidence · Cleanup, plus a feature map
+```
+
 **Handing off to another machine or harness**
 
 ```
@@ -292,15 +301,15 @@ The first one that fits wins:
 
 ## Reserved for you
 
-`/spec`, `/issues`, `/build`, `/arch`, `/handoff`, `/debt`, `/audit` and `/guide` run only when you type them. `/ship` runs when you type it or tap **Ship it**. The model can't start them on its own (`tap-approval.py`), and can't read their `SKILL.md` to replay them by hand (`reserved-skills.py`). Commits and pushes on `main` are blocked (`no-commit-on-default.py`).
+`/spec`, `/issues`, `/build`, `/arch`, `/handoff`, `/debt`, `/audit`, `/guide` and `/verify-skill` run only when you type them. `/ship` runs when you type it or tap **Ship it**. The model can't start them on its own (`tap-approval.py`), and can't read their `SKILL.md` to replay them by hand (`reserved-skills.py`). Commits and pushes on `main` are blocked (`no-commit-on-default.py`).
 
 ## Skills
 
-The idea → ship chain: `grill` → `spec` → `issues` → `build` (`tdd`, `review`) → `ship`. `guide` maps it on one screen.
+The idea → ship chain: `grill` → `spec` → `issues` → `build` (`tdd`, `verify`, `review`) → `ship`. `guide` maps it on one screen.
 
 - `arch` — find deepening opportunities, report the top candidates, grill the one you pick
 - `audit` — whole-repo hunt for over-engineering, ranked
-- `build` — build one ticket: trace, plan, branch, TDD, check, review, then offer to ship
+- `build` — build one ticket: trace, plan, branch, TDD, check, verify, review, then offer to ship
 - `debt` — harvest `lazy:` shortcut comments into one ledger
 - `deep-modules` — shared vocabulary for designing deep modules
 - `diagnose` — loop for hard bugs and performance regressions
@@ -312,10 +321,13 @@ The idea → ship chain: `grill` → `spec` → `issues` → `build` (`tdd`, `re
 - `lazy` — the simplest solution that works; always on via the SessionStart hook
 - `prototype` — throwaway prototype to answer a design question
 - `review` — review since a fixed point: standards, spec, lean
+- `ripple` — what a small diff could break elsewhere; the one safety fact proven by running code
 - `ship` — layered commits → PR → merge; starts only on the user's say-so (`tap-approval.py`)
 - `spec` — turn the conversation into a spec issue
 - `tdd` — red → green at the ticket's seams
 - `tickets` — impact analysis and dev-ready tickets in ClickUp
+- `verify` — prove the change works on its real surface: evidence and one verdict, PASS / FAIL / INCONCLUSIVE
+- `verify-skill` — generate or maintain a project-local `verify-<app>` skill: how to launch, drive and prove the app, plus a feature map
 
 ## Hooks
 
