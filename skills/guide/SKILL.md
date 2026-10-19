@@ -15,7 +15,7 @@ Display this card. Don't act on it; the user picks the command.
 | 1 | `/grill` | The idea, interviewed in rounds. Only build-changing questions are asked; the rest is defaulted and listed under **Assumed**. Terms land in `docs/glossary.md`, hard-to-reverse choices in `docs/adr/`. |
 | 2 | `/spec` | One GitHub issue: Problem · Solution · **Slices** (one per visible vertical slice, 1–3 typical) · Decisions · Seams under test · Assumed · Not building. |
 | 3 | `/issues <spec #>` | One issue **per slice**, blockers first, with native dependency edges. Shown once, published on "yes". |
-| 4 | `/clear`, then `/build <ticket #>` | Read the ticket → trace the code → the plan, then a **"Go?"** question → branch → `/tdd` at the ticket's seams → checks → `/review` → a **"Ship it?"** question. One ticket per context window. |
+| 4 | `/clear`, then `/build <ticket #>` | Read the ticket → trace the code → the plan, then a **"Go?"** question → branch → `/tdd` at the ticket's seams → checks → `/verify` (run it for real: evidence, PASS/FAIL/INCONCLUSIVE) → `/review` → a **"Ship it?"** question. One ticket per context window. |
 | 5 | tap **Ship it**, or type `/ship` | Layered commits that each pass the checks, a PR, a **"Merge?"** question, rebase-merge, what's next. |
 
 Every stop is a tappable question, so it reaches you in the Remote Control app — and answering one never changes the permission mode.
@@ -27,6 +27,8 @@ Keep steps 1–3 in one context window; `/clear` before every `/build`.
 - A question only running code can answer → `/prototype` (throwaway, kept on a `prototype/<name>` branch; the answer folds back into the thread). Crossing a directory or harness? `/handoff` out and back.
 - Something's broken → `/diagnose`. Builds a red-capable feedback loop before any theory; hands structural findings to `/arch`.
 - A spare moment to keep the codebase good for agents → `/arch`. HTML report of ≤5 deepening candidates, then `/grill` on the one you pick. Vocabulary underneath: `/deep-modules` (module, interface, depth, seam) and `/domain` (glossary, ADRs).
+- A small diff you don't trust → `/ripple`. The one fact it's safe because of, proven by running code, not asserted.
+- No scripted way to drive the app → `/verify-skill`. A project-local `verify-<app>` skill with a feature map; `/verify` follows it from then on, and `/verify-skill maintain` keeps it honest.
 
 ## Lazy, always on
 
@@ -38,4 +40,4 @@ First yes wins: **continue** (the next phase needs this one verbatim, or there's
 
 ## Reserved for you
 
-`/spec`, `/issues`, `/build`, `/arch`, `/handoff`, `/debt`, `/audit`, `/guide` run only when you type them. `/ship` runs when you type it or tap **Ship it** — never otherwise (`tap-approval.py`). The model can't invoke the rest, and can't read any of their `SKILL.md` to replay them by hand (`reserved-skills.py`). Commits and pushes on `main` are blocked (`no-commit-on-default.py`).
+`/spec`, `/issues`, `/build`, `/arch`, `/handoff`, `/debt`, `/audit`, `/guide`, `/verify-skill` run only when you type them. `/ship` runs when you type it or tap **Ship it** — never otherwise (`tap-approval.py`). The model can't invoke the rest, and can't read any of their `SKILL.md` to replay them by hand (`reserved-skills.py`). Commits and pushes on `main` are blocked (`no-commit-on-default.py`).

@@ -85,7 +85,7 @@ git push -u origin <branch>
 gh pr create --base <default-branch> --head <branch> --title "<subject>" --body-file -
 ```
 
-The body is drawn from the ticket, not invented: what it does, the decisions worth not re-deriving, anything the review changed, how to verify it, and anything deliberately left undone. Include `Closes #N` so the ticket closes itself on merge. Name the commits and what each one is, since the whole point of shaping them is that somebody can read them. End with `🤖 Generated with [Claude Code](https://claude.com/claude-code)`.
+The body is drawn from the ticket, not invented: what it does, the decisions worth not re-deriving, anything the review changed, how it was verified (`/verify`'s verdict and what ran) and how to verify it again, and anything deliberately left undone. Include `Closes #N` so the ticket closes itself on merge. Name the commits and what each one is, since the whole point of shaping them is that somebody can read them. End with `🤖 Generated with [Claude Code](https://claude.com/claude-code)`.
 
 ### 4. Checks
 
@@ -123,7 +123,7 @@ Confirm afterwards: the commits are on the default branch, the tree is clean, an
 
 Not a summary of what just happened — the user watched that. What to do next:
 
-- **What this ticket left unfinished.** Verification steps its own ticket listed that have not been run yet, especially anything needing credentials or a live service.
+- **What this ticket left unfinished.** Verification steps its own ticket listed that have not been run yet, and anything `/verify` reported INCONCLUSIVE — especially what needs credentials or a live service.
 - **What it unblocks.** Read it from the tracker (`gh issue list --label ready-for-agent`), do not guess. Say which tickets are ready now and why.
 - **Debts left in the code.** Every `# lazy:` marker this branch added, with its ceiling and trigger (`/debt` lists them all), and anything else deliberately deferred and where it is written down.
 - **Judgement calls worth revisiting**, if the review raised something you decided against.
