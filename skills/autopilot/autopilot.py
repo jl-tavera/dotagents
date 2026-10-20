@@ -15,7 +15,7 @@ for itself. The session loads user, project and local settings, so the repo's ow
 CLAUDE.md and .mcp.json apply as in an interactive session. Prints one line per milestone, flushed, so
 whoever runs it (a person or the /autopilot chat) can follow along.
 
-Another session starts only while the subscription's 5-hour and 7-day windows are under CEILING. The
+Another session starts only while the subscription's 5-hour window is under CEILING. The
 reading comes from the sessions themselves: `--output-format stream-json` sends a `rate_limit_event`
 within its first few lines and on every 1% change (seen in every logged run; not in the docs). No
 reading yet counts as headroom, and one session always runs.
@@ -41,12 +41,12 @@ LABEL = "ready-for-agent"
 STUCK = "needs-human"
 MAX_JOBS = 4  # default for --jobs
 MODEL = "claude-opus-5-5"  # default for --model; the full ID pins it, the `opus` alias would follow the newest
-CEILING = 0.80  # lazy: one ceiling for both windows; split them if the weekly one bites first
+CEILING = 0.80
 INSTALL = {"pnpm-lock.yaml": ["pnpm", "install", "--frozen-lockfile", "--prefer-offline"],
            "package-lock.json": ["npm", "ci"]}
 
 # Latest utilization per window, 0..1, written by whichever session reported last.
-usage: dict[str, float | None] = {"five_hour": None, "seven_day": None}
+usage: dict[str, float | None] = {"five_hour": None}
 reported: set[int] = set()  # tickets whose session has sent at least one rate_limit_event
 
 
@@ -122,8 +122,8 @@ def headroom(usage: dict, last_started: int | None, reported: set, running: dict
     """Whether one more session may start.
 
     Nothing running always may: the queue then moves one ticket at a time, as it did before. Otherwise
-    wait for the newest session's first reading (seconds after it starts), then ask for both windows
-    under CEILING. No reading at all counts as headroom.
+    wait for the newest session's first reading (seconds after it starts), then ask for the 5-hour
+    window under CEILING. No reading at all counts as headroom.
     """
     if not running:
         return True
@@ -133,8 +133,8 @@ def headroom(usage: dict, last_started: int | None, reported: set, running: dict
 
 
 def gauge() -> str:
-    """`5h 23% · 7d 41%`, or whatever is known so far."""
-    parts = [f"{label} {value * 100:.0f}%" for label, value in zip(("5h", "7d"), usage.values()) if value is not None]
+    """`5h 23%`, or `usage unknown`."""
+    parts = [f"{label} {value * 100:.0f}%" for label, value in zip(("5h",), usage.values()) if value is not None]
     return " · ".join(parts) or "usage unknown"
 
 

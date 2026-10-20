@@ -7,7 +7,7 @@ argument-hint: "[51-55 | 51 53 54 | empty = every ready-for-agent ticket] [--max
 
 # Autopilot
 
-Start the queue and report on it. You don't build anything here: every ticket runs in its own fresh `claude -p "/build <n> auto"` session, on Opus 5.5 unless `--model X` says otherwise, in its own worktree (`<repo>-worktrees/<n>`), started by the script next to this file. Up to four run at once (`--jobs N` sets the cap); another starts only while the 5-hour and weekly usage windows are under 80%.
+Start the queue and report on it. You don't build anything here: every ticket runs in its own fresh `claude -p "/build <n> auto"` session, on Opus 5.5 unless `--model X` says otherwise, in its own worktree (`<repo>-worktrees/<n>`), started by the script next to this file. Up to four run at once (`--jobs N` sets the cap); another starts only while the 5-hour usage window is under 80%.
 
 1. **Start it in the background**, from the project root, with the user's arguments as given:
    `python ~/.claude/skills/autopilot/autopilot.py $ARGUMENTS` with `run_in_background: true`. Then watch its output with Monitor so each line reaches the chat as it's printed.
