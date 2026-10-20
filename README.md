@@ -22,7 +22,7 @@ Anything already at one of those paths that isn't a link here is left alone and 
 - `AGENTS.md` — rules every harness should follow.
 - `skills/` — one folder per skill, `SKILL.md` in the open Agent Skills format.
 - `hooks/` — Python hooks, JSON on stdin, exit code out. Each looks for skills in the project's `.claude/` first, then `~/.claude/`. Test: `python hooks/test_tap_approval.py` and `python skills/autopilot/test_autopilot.py`.
-- Never copy `hooks/` or these skills into a project's `.claude/`: a copy goes stale, and its hooks fire alongside the linked ones (an old `tap-approval.py` stopped `/autopilot` from shipping). A project's `.claude/` holds only its own skills and `lazy-mode`. `/autopilot` sessions skip project settings for this reason.
+- Never copy `hooks/` or these skills into a project's `.claude/`: a copy goes stale, and its hooks fire alongside the linked ones (an old `tap-approval.py` stopped `/autopilot` from shipping). A project's `.claude/` holds only its own skills and `lazy-mode`. `/autopilot` sessions load project settings, so a vendored copy would fire there too.
 - `harness/<name>/` — the wiring one harness needs. Adding a harness = a folder here and a few lines in `install.py`.
 
 ## Why this exists

@@ -11,9 +11,9 @@ Run it from the project's root. Each ticket gets a worktree at <root>-worktrees/
 freshly fetched remote default branch, and a fresh `claude -p` session there on `--model` (Opus 5.5
 unless told otherwise, whatever the settings say) with CLAUDE_AUTOPILOT=1 in its env -- the only
 thing that lets tap-approval.py start /ship without a tap, and something the model inside cannot set
-for itself. The session loads user and local settings only, so only the user-level hooks guard it
-(see run()). Prints one line per milestone, flushed, so whoever runs it (a person or the /autopilot
-chat) can follow along.
+for itself. The session loads user, project and local settings, so the repo's own hooks, skills,
+CLAUDE.md and .mcp.json apply as in an interactive session. Prints one line per milestone, flushed, so
+whoever runs it (a person or the /autopilot chat) can follow along.
 
 Another session starts only while the subscription's 5-hour and 7-day windows are under CEILING. The
 reading comes from the sessions themselves: `--output-format stream-json` sends a `rate_limit_event`
@@ -241,10 +241,7 @@ def sync(root: str, base: str) -> None:
 def run(n: int, cwd: str, logs: str, claude: str, model: str) -> None:
     log_path = os.path.join(logs, f"{n}.log")
     env = {**os.environ, "CLAUDE_AUTOPILOT": "1"}
-    # No `project` source: repos that vendored an old copy of these hooks wire it in their
-    # .claude/settings.json, and that copy refuses /ship even with CLAUDE_AUTOPILOT set.
-    # lazy: drops a repo's own settings.json (permissions, env) too; load `project` again once no repo vendors hooks.
-    command = [claude, "-p", f"/build {n} auto", "--model", model, "--setting-sources", "user,local",
+    command = [claude, "-p", f"/build {n} auto", "--model", model, "--setting-sources", "user,project,local",
                "--permission-mode", "auto", "--output-format", "stream-json", "--verbose"]
     with open(log_path, "w", encoding="utf-8") as log, subprocess.Popen(
             command, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8",
