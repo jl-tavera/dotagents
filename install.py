@@ -43,7 +43,7 @@ def link(path: Path, target: Path) -> None:
 
 def merge_hooks(settings_path: Path, hooks_dir: Path) -> None:
     wiring = (REPO / "harness" / "claude" / "hooks.json").read_text(encoding="utf-8")
-    wiring = json.loads(wiring.replace("{HOOKS}", hooks_dir.as_posix()))
+    wiring = json.loads(wiring.replace("{HOOKS}", hooks_dir.as_posix()))  # "$HOME/..." so the same string works on every machine
     settings = json.loads(settings_path.read_text(encoding="utf-8")) if settings_path.exists() else {}
     hooks = settings.setdefault("hooks", {})
     added = 0
@@ -74,7 +74,7 @@ def main() -> int:
         claude_md.write_text(f"@{(REPO / 'AGENTS.md').as_posix()}\n", encoding="utf-8")
         print(f"write {claude_md}")
 
-    merge_hooks(claude / "settings.json", claude / "hooks")
+    merge_hooks(claude / "settings.json", Path("$HOME/.claude/hooks"))
     return 0
 
 
